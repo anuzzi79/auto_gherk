@@ -1,14 +1,17 @@
-(()=>{
-  const HAWK_URL='hawk.glb?v=2';
+(async()=>{
+  const HAWK_URL='hawk.glb?v=3';
   const status=document.getElementById('status');
 
-  if(typeof THREE.GLTFLoader!=='function'){
-    console.warn('GLTFLoader non disponibile: mantengo gli uccelli provvisori.');
+  let GLTFLoader;
+  try{
+    ({GLTFLoader}=await import('https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js'));
+  }catch(error){
+    console.warn('GLTFLoader non disponibile:',error);
     status.textContent='Caricatore GLB non disponibile: uso gli uccelli provvisori';
     return;
   }
 
-  const loader=new THREE.GLTFLoader();
+  const loader=new GLTFLoader();
   loader.load(HAWK_URL,gltf=>{
     const model=gltf.scene;
     model.name='Sherkiz_Hawk_Rigged';
@@ -32,7 +35,6 @@
       action.timeScale=1;
     }
 
-    // Nasconde gli uccelli geometrici soltanto dopo il caricamento riuscito.
     for(const animal of animals){
       if(animal.kind==='bird'){
         animal.disabled=true;

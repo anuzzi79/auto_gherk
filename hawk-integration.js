@@ -1,5 +1,5 @@
 (async()=>{
-  const HAWK_URL='hawk.glb?v=6';
+  const HAWK_URL='hawk.glb?v=7';
   const status=document.getElementById('status');
   const HAWK_COUNT=5;
 
@@ -22,11 +22,24 @@
     return current+delta*amount;
   }
 
+  // Il flight frame rappresenta soltanto la direzione risultante del volo.
+  // Il modello GLB è un figlio con una correzione anatomica locale indipendente.
   function orientAlongVelocity(hawk,vx,vy,vz,bankTarget=0,amount=.16){
-    const horizontal=Math.hypot(vx,vz);
-    if(horizontal<.0001&&Math.abs(vy)<.0001)return;
-    const targetYaw=Math.atan2(vx,vz);
-    const targetPitch=-Math.atan2(vy,Math.max(.0001,horizontal));
+    const raw=new THREE.Vector3(vx,vy,vz);
+    if(raw.lengthSq()<.000001)return;
+    raw.normalize();
+
+    if(!hawk.flightDirection||hawk.flightDirection.lengthSq()<.000001){
+      hawk.flightDirection=raw.clone();
+    }else{
+      hawk.flightDirection.lerp(raw,Math.min(1,amount*1.8)).normalize();
+    }
+
+    const direction=hawk.flightDirection;
+    const horizontal=Math.hypot(direction.x,direction.z);
+    const targetYaw=Math.atan2(direction.x,direction.z);
+    const targetPitch=-Math.atan2(direction.y,Math.max(.0001,horizontal));
+
     hawk.g.rotation.order='YXZ';
     hawk.g.rotation.y=lerpAngle(hawk.g.rotation.y,targetYaw,amount);
     hawk.g.rotation.x=THREE.MathUtils.lerp(hawk.g.rotation.x,targetPitch,amount);
@@ -54,20 +67,28 @@
     }
 
     routes.slice(0,HAWK_COUNT).forEach((route,index)=>{
-      const model=index===0?gltf.scene:cloneSkeleton(gltf.scene);
-      model.name=`Sherkiz_Hawk_Rigged_${index+1}`;
-      model.scale.setScalar(route.scale);
-      model.rotation.order='YXZ';
-      model.traverse(o=>{
+      const visual=index===0?gltf.scene:cloneSkeleton(gltf.scene);
+      visual.name=`Sherkiz_Hawk_Visual_${index+1}`;
+      visual.scale.setScalar(route.scale);
+      // Il GLB è costruito con il corpo lungo l'asse verticale locale.
+      // Questa rotazione lo dispone orizzontalmente nel flight frame.
+      visual.rotation.order='XYZ';
+      visual.rotation.x=-Math.PI/2;
+      visual.traverse(o=>{
         if(o.isMesh){
           o.castShadow=true;
           o.receiveShadow=true;
           o.frustumCulled=false;
         }
       });
-      scene.add(model);
 
-      const mixer=new THREE.AnimationMixer(model);
+      const flightFrame=new THREE.Group();
+      flightFrame.name=`Hawk_Flight_Frame_${index+1}`;
+      flightFrame.rotation.order='YXZ';
+      flightFrame.add(visual);
+      scene.add(flightFrame);
+
+      const mixer=new THREE.AnimationMixer(visual);
       const action=clip?mixer.clipAction(clip):null;
       if(action){
         action.reset().setLoop(THREE.LoopRepeat,Infinity).play();
@@ -79,10 +100,13 @@
       const initialX=route.cx+Math.cos(angle)*route.r;
       const initialZ=route.cz+Math.sin(angle)*route.r;
       const initialY=Math.max(heightAt(initialX,initialZ)+5.4,route.base);
-      model.position.set(initialX,initialY,initialZ);
+      flightFrame.position.set(initialX,initialY,initialZ);
 
+      const tangentX=-Math.sin(angle)*route.r*route.omega;
+      const tangentZ=Math.cos(angle)*route.r*route.omega;
       const hawk={
-        g:model,
+        g:flightFrame,
+        visual,
         a:route.phase,
         s:1.4,
         kind:'bird',
@@ -91,13 +115,15 @@
         riderControlled:false,
         mixer,
         action,
-        originalScale:model.scale.clone(),
+        originalScale:flightFrame.scale.clone(),
         flapBoost:0,
         route:{...route},
         wasControlled:false,
-        previousPosition:model.position.clone(),
-        lastVelocity:new THREE.Vector3()
+        previousPosition:flightFrame.position.clone(),
+        lastVelocity:new THREE.Vector3(tangentX,0,tangentZ),
+        flightDirection:new THREE.Vector3(tangentX,0,tangentZ).normalize()
       };
+      orientAlongVelocity(hawk,tangentX,0,tangentZ,-Math.sign(route.omega)*.12,1);
       animals.push(hawk);
       hawks.push(hawk);
     });
@@ -137,9 +163,9 @@
           hawk.previousPosition.copy(hawk.g.position);
         }
 
-        const angle=route.phase+elapsed*route.omega;
-        const x=route.cx+Math.cos(angle)*route.r;
-        const z=route.cz+Math.sin(angle)*route.r;
+        const angleNow=route.phase+elapsed*route.omega;
+        const x=route.cx+Math.cos(angleNow)*route.r;
+        const z=route.cz+Math.sin(angleNow)*route.r;
         const terrain=heightAt(x,z);
         const y=Math.max(terrain+5.4,route.base+Math.sin(elapsed*1.15+route.phase)*route.bob);
 

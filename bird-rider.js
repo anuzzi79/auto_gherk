@@ -1,27 +1,27 @@
 (()=>{
   let ridingBird=null;
-  let rideStatusCooldown=0;
+  let grabCooldown=0;
 
-  function nearestReachableBird(){
+  function nearestReachableBird(maxDistance=3.4){
     let best=null,bestD=Infinity;
     for(const animal of animals){
-      if(animal.kind!=='bird')continue;
+      if(animal.kind!=='bird'||animal.riderControlled)continue;
       const dx=animal.g.position.x-john.position.x;
       const dy=animal.g.position.y-(john.position.y+2.2);
       const dz=animal.g.position.z-john.position.z;
       const d=Math.hypot(dx,dy,dz);
       if(d<bestD){bestD=d;best=animal;}
     }
-    return bestD<3.4?best:null;
+    return bestD<maxDistance?best:null;
   }
 
   function setHangingPose(active){
     if(typeof leftArm!=='undefined'&&typeof rightArm!=='undefined'){
       if(active){
-        leftArm.rotation.set(0,0,-2.72);
-        rightArm.rotation.set(0,0,2.72);
-        leftArm.position.set(-.48,2.75,0);
-        rightArm.position.set(.48,2.75,0);
+        leftArm.rotation.set(-.1,0,-2.72);
+        rightArm.rotation.set(-.1,0,2.72);
+        leftArm.position.set(-.48,2.82,0);
+        rightArm.position.set(.48,2.82,0);
       }else if(typeof resetSlidePose==='function'){
         resetSlidePose();
       }else{
@@ -30,42 +30,54 @@
       }
     }
     if(active){
-      leg1.rotation.x=.35;leg2.rotation.x=-.22;
+      leg1.rotation.x=.38;leg2.rotation.x=-.24;
       john.rotation.x=.08;john.rotation.z=0;
     }
+  }
+
+  function attachToBird(bird){
+    if(!bird||ridingBird||grabCooldown>0)return false;
+    ridingBird=bird;
+    bird.riderControlled=true;
+    bird.originalScale=bird.originalScale||bird.g.scale.clone();
+    bird.g.scale.copy(bird.originalScale).multiplyScalar(1.65);
+    airborne=false;verticalVelocity=0;jumpPushX=jumpPushZ=0;
+    setHangingPose(true);
+    document.getElementById('status').textContent='John ha afferrato l’uccello — guidalo!';
+    return true;
   }
 
   function releaseBird(){
     if(!ridingBird)return false;
     const bird=ridingBird;
     bird.riderControlled=false;
-    bird.g.scale.copy(bird.originalScale||new THREE.Vector3(1,1,1));
+    if(bird.originalScale)bird.g.scale.copy(bird.originalScale);
     ridingBird=null;
     setHangingPose(false);
     airborne=true;
     verticalVelocity=2.8;
     jumpPushX=Math.sin(yaw)*4.2;
     jumpPushZ=Math.cos(yaw)*4.2;
+    grabCooldown=.9;
     document.getElementById('status').textContent='John lascia l’uccello!';
     return true;
   }
 
+  // JUMP mentre appeso = lascia la presa. L'aggancio, invece, è automatico.
   function toggleBirdRide(){
     if(ridingBird)return releaseBird();
-    if(!airborne)return false;
-    const bird=nearestReachableBird();
-    if(!bird)return false;
-    ridingBird=bird;
-    bird.riderControlled=true;
-    bird.originalScale=bird.g.scale.clone();
-    bird.g.scale.multiplyScalar(1.65);
-    airborne=false;verticalVelocity=0;jumpPushX=jumpPushZ=0;
-    setHangingPose(true);
-    document.getElementById('status').textContent='John è appeso all’uccello — guidalo!';
-    return true;
+    return false;
   }
 
   function updateBirdRide(dt,t,inputX,inputY,yawValue,pitchValue){
+    grabCooldown=Math.max(0,grabCooldown-dt);
+
+    // Aggancio automatico: John deve essere in aria e toccare il volume dell'uccello.
+    if(!ridingBird&&airborne&&grabCooldown<=0){
+      const bird=nearestReachableBird(3.15);
+      if(bird)attachToBird(bird);
+    }
+
     if(!ridingBird)return false;
     const bird=ridingBird;
     const forward=-inputY;
@@ -99,7 +111,6 @@
     setHangingPose(true);
     leg1.rotation.x=.28+Math.sin(t*4)*.12;
     leg2.rotation.x=-.18+Math.sin(t*4+1.1)*.12;
-    rideStatusCooldown-=dt;
     return true;
   }
 

@@ -33,7 +33,9 @@
     }
     if(active){
       leg1.rotation.x=.42;leg2.rotation.x=-.28;
-      john.rotation.x=.11;john.rotation.z=0;
+      // John resta verticale rispetto alla gravità; non eredita pitch e roll del falco.
+      john.rotation.x=0;
+      john.rotation.z=0;
     }
   }
 
@@ -78,6 +80,8 @@
     const duration=1.65;
     bird.flapBoost=Math.max(bird.flapBoost||0,1-grabSequenceT/duration);
 
+    // La perdita e il recupero di quota non cambiano la direzione prominente del volo.
+    // Il flight frame conserva l'orientamento testa-coda che aveva al momento dell'aggancio.
     if(grabSequenceT<.38){
       const u=grabSequenceT/.38;
       bird.g.position.y=grabStartY-THREE.MathUtils.smoothstep(u,0,1)*1.35;
@@ -85,7 +89,6 @@
       const u=(grabSequenceT-.38)/(duration-.38);
       const recovery=THREE.MathUtils.smoothstep(u,0,1);
       bird.g.position.y=THREE.MathUtils.lerp(grabStartY-1.35,grabStartY+.45,recovery);
-      bird.g.rotation.z=Math.sin(t*16)*(1-u)*.07;
     }else{
       document.getElementById('status').textContent='Falco sotto controllo — guidalo!';
       return false;
@@ -147,8 +150,12 @@
       }
     }
 
+    // John pende sotto il centro del flight frame lungo l'asse verticale del mondo.
     john.position.set(bird.g.position.x,bird.g.position.y-3.05,bird.g.position.z);
+    // Copia soltanto l'azimut: falco orizzontale, John verticale e perpendicolare.
     john.rotation.y=bird.g.rotation.y;
+    john.rotation.x=0;
+    john.rotation.z=0;
     setHangingPose(true);
     leg1.rotation.x=.30+Math.sin(t*4)*.13;
     leg2.rotation.x=-.20+Math.sin(t*4+1.1)*.13;

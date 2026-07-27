@@ -3,6 +3,7 @@
   let grabCooldown=0;
   let grabSequenceT=0;
   let grabStartY=0;
+  let grabFlightYaw=0;
 
   function nearestReachableBird(maxDistance=3.7){
     let best=null,bestD=Infinity;
@@ -33,7 +34,6 @@
     }
     if(active){
       leg1.rotation.x=.42;leg2.rotation.x=-.28;
-      // John resta verticale rispetto alla gravità; non eredita pitch e roll del falco.
       john.rotation.x=0;
       john.rotation.z=0;
     }
@@ -48,6 +48,15 @@
     airborne=false;verticalVelocity=0;jumpPushX=jumpPushZ=0;
     grabSequenceT=0;
     grabStartY=bird.g.position.y;
+    grabFlightYaw=bird.g.rotation.y;
+    // Nel momento dell'aggancio conserviamo la direzione orizzontale del volo.
+    // Il falco non deve ruotare verticalmente per adattarsi a John.
+    bird.g.rotation.order='YXZ';
+    bird.g.rotation.set(0,grabFlightYaw,0);
+    if(bird.flightDirection){
+      bird.flightDirection.y=0;
+      if(bird.flightDirection.lengthSq()>.000001)bird.flightDirection.normalize();
+    }
     bird.flapBoost=1;
     setHangingPose(true);
     document.getElementById('status').textContent='John afferra il falco: reggiti!';
@@ -80,8 +89,13 @@
     const duration=1.65;
     bird.flapBoost=Math.max(bird.flapBoost||0,1-grabSequenceT/duration);
 
-    // La perdita e il recupero di quota non cambiano la direzione prominente del volo.
-    // Il flight frame conserva l'orientamento testa-coda che aveva al momento dell'aggancio.
+    // Durante tutta la presa iniziale il corpo resta orizzontale e conserva
+    // l'azimut di volo precedente. Cambia solo la quota del flight frame.
+    bird.g.rotation.order='YXZ';
+    bird.g.rotation.x=0;
+    bird.g.rotation.y=grabFlightYaw;
+    bird.g.rotation.z=0;
+
     if(grabSequenceT<.38){
       const u=grabSequenceT/.38;
       bird.g.position.y=grabStartY-THREE.MathUtils.smoothstep(u,0,1)*1.35;
@@ -150,9 +164,8 @@
       }
     }
 
-    // John pende sotto il centro del flight frame lungo l'asse verticale del mondo.
+    // John è un carico sospeso: resta verticale e centrato sotto il falco.
     john.position.set(bird.g.position.x,bird.g.position.y-3.05,bird.g.position.z);
-    // Copia soltanto l'azimut: falco orizzontale, John verticale e perpendicolare.
     john.rotation.y=bird.g.rotation.y;
     john.rotation.x=0;
     john.rotation.z=0;

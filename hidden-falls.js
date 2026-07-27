@@ -22,12 +22,7 @@
       const g=terrainGradient(x,z);
       let dx=-g.dx,dz=-g.dz;
       const len=Math.hypot(dx,dz);
-      if(len<.025){
-        dx=.55;dz=-.85;
-      }else{
-        dx/=len;dz/=len;
-      }
-      // lieve inerzia verso la costa per evitare oscillazioni locali
+      if(len<.025){dx=.55;dz=-.85;}else{dx/=len;dz/=len;}
       dx=dx*.82+.18*.45;
       dz=dz*.82-.18*.9;
       const n=Math.hypot(dx,dz)||1;
@@ -47,10 +42,7 @@
       const nx=-dz/len,nz=dx/len;
       const leftX=x+nx*width,leftZ=z+nz*width;
       const rightX=x-nx*width,rightZ=z-nz*width;
-      verts.push(
-        leftX,heightAt(leftX,leftZ)+yOffset,leftZ,
-        rightX,heightAt(rightX,rightZ)+yOffset,rightZ
-      );
+      verts.push(leftX,heightAt(leftX,leftZ)+yOffset,leftZ,rightX,heightAt(rightX,rightZ)+yOffset,rightZ);
     }
     const indices=[];
     for(let i=0;i<points.length-1;i++){
@@ -63,7 +55,6 @@
     return new THREE.Mesh(geo,material.clone());
   }
 
-  // Corso superiore: aderisce al pendio fino al bordo della cascata.
   const upperPath=traceDownhill(8,-2,18,1.05);
   upperPath.push([lip.x,lip.z]);
   const upperStream=ribbonFromTerrain(upperPath,.78,waterMat,.1);
@@ -80,19 +71,16 @@
   waterfall.rotation.x=-Math.atan2(Math.hypot(dx,dz),fallHeight);
   scene.add(waterfall);
 
-  // Piccola vasca d'impatto, non una mezzaluna sospesa.
   const impactPool=new THREE.Mesh(new THREE.CircleGeometry(2.15,36),waterMat.clone());
   impactPool.rotation.x=-Math.PI/2;
   impactPool.scale.set(1.15,.78,1);
   impactPool.position.set(impactX,impactY,impactZ);
   scene.add(impactPool);
 
-  // Uscita della vasca: segue automaticamente la massima discesa fino alla costa.
   const runoffPath=traceDownhill(impactX+.7,impactZ-.4,56,.92);
   const runoff=ribbonFromTerrain(runoffPath,.62,waterMat,.075);
   scene.add(runoff);
 
-  // Rocce lungo cascata e torrente, appoggiate alla quota reale.
   const allPath=upperPath.concat(runoffPath);
   for(let i=2;i<allPath.length;i+=3){
     const [x,z]=allPath[i],prev=allPath[Math.max(0,i-1)],next=allPath[Math.min(allPath.length-1,i+1)];
@@ -120,6 +108,97 @@
     s.position.set(impactX+(Math.random()-.5)*3.8,impactY+.18+Math.random()*1.15,impactZ+(Math.random()-.5)*3.2);
     s.userData={baseY:s.position.y,phase:Math.random()*Math.PI*2};
     scene.add(s);spray.push(s);
+  }
+
+  // Braccia aggiunte al modello semplice di John per rendere leggibile la posa di scivolamento.
+  const armGeo=new THREE.BoxGeometry(.3,1.35,.34);
+  const leftArm=new THREE.Mesh(armGeo,shirt);
+  const rightArm=new THREE.Mesh(armGeo,shirt);
+  leftArm.position.set(-.72,2.25,0);
+  rightArm.position.set(.72,2.25,0);
+  leftArm.castShadow=rightArm.castShadow=true;
+  john.add(leftArm,rightArm);
+
+  const slideRoute=[];
+  upperPath.forEach(([x,z])=>slideRoute.push({x,z,y:heightAt(x,z)+.12}));
+  slideRoute.push({x:lip.x,z:lip.z,y:topY});
+  slideRoute.push({x:impactX,z:impactZ,y:impactY+.08});
+  runoffPath.slice(1,22).forEach(([x,z])=>slideRoute.push({x,z,y:heightAt(x,z)+.1}));
+
+  let sliding=false,slideIndex=0,slideProgress=0;
+
+  function nearestSlideIndex(){
+    let best=-1,bestD=Infinity;
+    for(let i=0;i<slideRoute.length-1;i++){
+      const p=slideRoute[i];
+      const d=Math.hypot(john.position.x-p.x,john.position.z-p.z);
+      if(d<bestD){bestD=d;best=i;}
+    }
+    return bestD<1.25?best:-1;
+  }
+
+  function resetSlidePose(){
+    john.rotation.x=0;
+    john.rotation.z=0;
+    leftArm.rotation.set(0,0,0);
+    rightArm.rotation.set(0,0,0);
+    leftArm.position.set(-.72,2.25,0);
+    rightArm.position.set(.72,2.25,0);
+  }
+
+  function updateWaterSlide(dt,t){
+    if(!sliding){
+      const nearest=nearestSlideIndex();
+      if(nearest>=0){
+        sliding=true;
+        slideIndex=nearest;
+        slideProgress=0;
+        document.getElementById('status').textContent='John sta scivolando nella cascata!';
+      }else{
+        resetSlidePose();
+        return false;
+      }
+    }
+
+    const current=slideRoute[slideIndex],next=slideRoute[Math.min(slideIndex+1,slideRoute.length-1)];
+    const segmentLength=Math.max(.2,Math.hypot(next.x-current.x,next.y-current.y,next.z-current.z));
+    const steepness=Math.max(0,current.y-next.y);
+    slideProgress+=(4.5+steepness*2.4)*dt/segmentLength;
+
+    while(slideProgress>=1&&slideIndex<slideRoute.length-2){
+      slideProgress-=1;
+      slideIndex++;
+    }
+
+    const a=slideRoute[slideIndex],b=slideRoute[Math.min(slideIndex+1,slideRoute.length-1)];
+    const u=Math.min(1,slideProgress);
+    john.position.set(
+      THREE.MathUtils.lerp(a.x,b.x,u),
+      THREE.MathUtils.lerp(a.y,b.y,u),
+      THREE.MathUtils.lerp(a.z,b.z,u)
+    );
+
+    const dirX=b.x-a.x,dirY=b.y-a.y,dirZ=b.z-a.z;
+    john.rotation.y=Math.atan2(dirX,dirZ);
+    john.rotation.x=Math.max(-1.15,Math.min(.15,Math.atan2(-dirY,Math.hypot(dirX,dirZ))-.42));
+    john.rotation.z=Math.sin(t*7)*.08;
+
+    leftArm.rotation.z=-1.25+Math.sin(t*6)*.12;
+    rightArm.rotation.z=1.25-Math.sin(t*6+.8)*.12;
+    leftArm.rotation.x=.25;
+    rightArm.rotation.x=.25;
+    leg1.rotation.x=.75+Math.sin(t*8)*.16;
+    leg2.rotation.x=.48+Math.sin(t*8+1.2)*.16;
+
+    if(slideIndex>=slideRoute.length-2&&slideProgress>=.96){
+      sliding=false;
+      slideIndex=0;
+      slideProgress=0;
+      resetSlidePose();
+      document.getElementById('status').textContent='John è arrivato a valle!';
+      return false;
+    }
+    return true;
   }
 
   let found=false;

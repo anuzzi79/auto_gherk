@@ -110,7 +110,6 @@
     scene.add(s);spray.push(s);
   }
 
-  // Braccia aggiunte al modello semplice di John per rendere leggibile la posa di scivolamento.
   const armGeo=new THREE.BoxGeometry(.3,1.35,.34);
   const leftArm=new THREE.Mesh(armGeo,shirt);
   const rightArm=new THREE.Mesh(armGeo,shirt);
@@ -125,7 +124,7 @@
   slideRoute.push({x:impactX,z:impactZ,y:impactY+.08});
   runoffPath.slice(1,22).forEach(([x,z])=>slideRoute.push({x,z,y:heightAt(x,z)+.1}));
 
-  let sliding=false,slideIndex=0,slideProgress=0;
+  let sliding=false,slideIndex=0,slideProgress=0,slideEscapeCooldown=0;
 
   function nearestSlideIndex(){
     let best=-1,bestD=Infinity;
@@ -146,14 +145,39 @@
     rightArm.position.set(.72,2.25,0);
   }
 
+  function escapeWaterSlide(){
+    if(!sliding)return false;
+    const a=slideRoute[slideIndex];
+    const b=slideRoute[Math.min(slideIndex+1,slideRoute.length-1)];
+    let dirX=b.x-a.x,dirZ=b.z-a.z;
+    const len=Math.hypot(dirX,dirZ)||1;
+    dirX/=len;dirZ/=len;
+    sliding=false;
+    slideEscapeCooldown=1.15;
+    slideIndex=0;
+    slideProgress=0;
+    resetSlidePose();
+    if(typeof jumpPushX!=='undefined'){
+      const side=Math.random()>.5?1:-1;
+      jumpPushX=(-dirZ*side+dirX*.25)*5.4;
+      jumpPushZ=(dirX*side+dirZ*.25)*5.4;
+    }
+    document.getElementById('status').textContent='John è saltato fuori dalla cascata!';
+    return true;
+  }
+
   function updateWaterSlide(dt,t){
+    slideEscapeCooldown=Math.max(0,slideEscapeCooldown-dt);
+    if(slideEscapeCooldown>0)return false;
+
     if(!sliding){
       const nearest=nearestSlideIndex();
-      if(nearest>=0){
+      if(nearest>=0&&!airborne){
         sliding=true;
         slideIndex=nearest;
         slideProgress=0;
-        document.getElementById('status').textContent='John sta scivolando nella cascata!';
+        verticalVelocity=0;
+        document.getElementById('status').textContent='John sta scivolando nella cascata! Premi JUMP per uscire';
       }else{
         resetSlidePose();
         return false;

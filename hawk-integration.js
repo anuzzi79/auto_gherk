@@ -1,20 +1,31 @@
 (async()=>{
-  const HAWK_URL='hawk.glb?v=10';
+  const HAWK_URL='hawk.glb?v=11';
   const status=document.getElementById('status');
   const HAWK_COUNT=5;
-  const ISLAND_FLIGHT_RADIUS=50;
+  const ISLAND_FLIGHT_RADIUS=46;
   const MAX_PITCH=Math.PI/9;
   let GLTFLoader,cloneSkeleton;
 
-  function showFallback(message){
+  function makeFallbackVisible(message){
+    let fallbackIndex=0;
     for(const animal of animals){
       if(animal.kind==='bird'&&!animal.isRiggedHawk){
         animal.disabled=false;
         animal.g.visible=true;
+        animal.g.scale.setScalar(2.2);
+        if(fallbackIndex<3){
+          const offsets=[[6,8],[-7,10],[10,-4]][fallbackIndex];
+          const x=john.position.x+offsets[0];
+          const z=john.position.z+offsets[1];
+          animal.g.position.set(x,heightAt(x,z)+7+fallbackIndex,z);
+        }
+        fallbackIndex++;
       }
     }
     if(status)status.textContent=message;
   }
+
+  makeFallbackVisible('Caricamento falchi reali…');
 
   try{
     const [loaderModule,skeletonModule]=await Promise.all([
@@ -25,7 +36,7 @@
     cloneSkeleton=skeletonModule.clone;
   }catch(error){
     console.error('Moduli GLTF non disponibili:',error);
-    showFallback('Uso gli uccelli provvisori');
+    makeFallbackVisible('Falchi reali non caricati: uccelli provvisori visibili');
     return;
   }
 
@@ -55,14 +66,14 @@
     hawk.lastVelocity.set(vx,vy,vz);
   }
 
-  function randomFlightTarget(currentPosition,minDistance=14){
+  function randomFlightTarget(currentPosition,minDistance=12){
     for(let attempt=0;attempt<30;attempt++){
       const radius=Math.sqrt(Math.random())*ISLAND_FLIGHT_RADIUS;
       const angle=Math.random()*Math.PI*2;
       const x=Math.cos(angle)*radius;
       const z=Math.sin(angle)*radius;
       if(Math.hypot(x-currentPosition.x,z-currentPosition.z)<minDistance)continue;
-      return new THREE.Vector3(x,heightAt(x,z)+7+Math.random()*7,z);
+      return new THREE.Vector3(x,heightAt(x,z)+7+Math.random()*6,z);
     }
     return new THREE.Vector3(0,heightAt(0,0)+11,0);
   }
@@ -79,26 +90,28 @@
   loader.load(HAWK_URL,gltf=>{
     const created=[];
     try{
-      const clip=gltf.animations.find(a=>a.name==='metarig|Fly')||gltf.animations[0];
-      const johnX=Number.isFinite(john.position.x)?john.position.x:0;
-      const johnZ=Number.isFinite(john.position.z)?john.position.z:18;
+      if(!gltf||!gltf.scene)throw new Error('GLB senza scena');
+      const clip=(gltf.animations||[]).find(a=>a.name==='metarig|Fly')||(gltf.animations||[])[0];
       const starts=[
-        {x:johnX+7,z:johnZ-3,scale:1.65,speed:6.4},
-        {x:-13,z:5,scale:1.38,speed:7.2},
-        {x:19,z:-10,scale:1.48,speed:7.0},
-        {x:-23,z:18,scale:1.30,speed:7.7},
-        {x:5,z:-24,scale:1.42,speed:7.4}
+        {x:john.position.x+4,z:john.position.z+5,scale:2.0,speed:5.8},
+        {x:john.position.x-8,z:john.position.z+9,scale:1.65,speed:6.6},
+        {x:16,z:-8,scale:1.55,speed:7.0},
+        {x:-20,z:14,scale:1.45,speed:7.4},
+        {x:4,z:-22,scale:1.55,speed:7.1}
       ];
       const hawks=[];
 
       starts.slice(0,HAWK_COUNT).forEach((start,index)=>{
         const visual=index===0?gltf.scene:cloneSkeleton(gltf.scene);
+        if(!visual)throw new Error(`Clone falco ${index+1} non riuscito`);
         visual.name=`Sherkiz_Hawk_Visual_${index+1}`;
         visual.scale.setScalar(start.scale);
         visual.rotation.order='YXZ';
         visual.rotation.set(0,Math.PI,0);
+        visual.visible=true;
         visual.traverse(o=>{
           if(o.isMesh){
+            o.visible=true;
             o.castShadow=true;
             o.receiveShadow=true;
             o.frustumCulled=false;
@@ -108,13 +121,14 @@
         const flightFrame=new THREE.Group();
         flightFrame.name=`Hawk_Flight_Frame_${index+1}`;
         flightFrame.rotation.order='YXZ';
+        flightFrame.visible=true;
         flightFrame.add(visual);
-        const initialY=heightAt(start.x,start.z)+7.5+index*.8;
+        const initialY=heightAt(start.x,start.z)+5.8+index*.7;
         flightFrame.position.set(start.x,initialY,start.z);
         scene.add(flightFrame);
         created.push(flightFrame);
 
-        const target=randomFlightTarget(flightFrame.position,18);
+        const target=randomFlightTarget(flightFrame.position,15);
         const initialDirection=target.clone().sub(flightFrame.position).setY(0);
         if(initialDirection.lengthSq()<.001)initialDirection.set(0,0,1);
         initialDirection.normalize();
@@ -144,18 +158,11 @@
 
       if(hawks.length!==HAWK_COUNT)throw new Error('Stormo incompleto');
 
-      // Nasconde i provvisori soltanto dopo la creazione completa dello stormo reale.
-      for(const animal of animals){
-        if(animal.kind==='bird'&&!animal.isRiggedHawk){
-          animal.disabled=true;
-          animal.g.visible=false;
-        }
-      }
-
+      // Non nascondiamo più i provvisori: restano come garanzia visiva.
       window.orientHawkAlongVelocity=orientAlongVelocity;
       window.johnHawks=hawks;
       window.johnHawk=hawks[0];
-      if(status)status.textContent=`${hawks.length} falchi volano liberamente sull’isola`;
+      if(status)status.textContent=`${hawks.length} falchi reali attivi`;
 
       const clock=new THREE.Clock();
       (function animateFreeHawks(){
@@ -178,14 +185,14 @@
 
           if(!validVector3(hawk.g.position)||!validVector3(hawk.velocity)){
             hawk.g.position.copy(hawk.safeStart);
-            hawk.target=randomFlightTarget(hawk.g.position,18);
+            hawk.target=randomFlightTarget(hawk.g.position,15);
             hawk.velocity.copy(hawk.target).sub(hawk.g.position).setY(0).normalize().multiplyScalar(hawk.cruiseSpeed);
           }
 
           if(hawk.wasControlled){
             const inherited=hawk.lastVelocity.clone();
             if(Math.hypot(inherited.x,inherited.z)>.2)hawk.velocity.copy(inherited);
-            hawk.target=randomFlightTarget(hawk.g.position,20);
+            hawk.target=randomFlightTarget(hawk.g.position,18);
             hawk.targetAge=0;
             hawk.wasControlled=false;
           }
@@ -194,7 +201,7 @@
           const toTarget=hawk.target.clone().sub(hawk.g.position);
           const horizontalDistance=Math.hypot(toTarget.x,toTarget.z);
           if(horizontalDistance<4.5||hawk.targetAge>14){
-            hawk.target=randomFlightTarget(hawk.g.position,16);
+            hawk.target=randomFlightTarget(hawk.g.position,14);
             hawk.targetAge=0;
             toTarget.copy(hawk.target).sub(hawk.g.position);
           }
@@ -210,8 +217,8 @@
           hawk.velocity.x=THREE.MathUtils.lerp(hawk.velocity.x,steered.x*hawk.cruiseSpeed,1-Math.exp(-1.7*dt));
           hawk.velocity.z=THREE.MathUtils.lerp(hawk.velocity.z,steered.z*hawk.cruiseSpeed,1-Math.exp(-1.7*dt));
 
-          const minimumY=heightAt(hawk.g.position.x,hawk.g.position.z)+5.8;
-          const desiredVy=THREE.MathUtils.clamp((hawk.target.y-hawk.g.position.y)*.48,-2.4,2.4);
+          const minimumY=heightAt(hawk.g.position.x,hawk.g.position.z)+5.2;
+          const desiredVy=THREE.MathUtils.clamp((hawk.target.y-hawk.g.position.y)*.48,-2.2,2.2);
           hawk.velocity.y=THREE.MathUtils.lerp(hawk.velocity.y,desiredVy,1-Math.exp(-1.25*dt));
           if(hawk.g.position.y<minimumY)hawk.velocity.y=Math.max(hawk.velocity.y,(minimumY-hawk.g.position.y)*2);
 
@@ -220,12 +227,12 @@
             const inward=new THREE.Vector3(-hawk.g.position.x,0,-hawk.g.position.z).normalize();
             hawk.velocity.x+=inward.x*9*dt;
             hawk.velocity.z+=inward.z*9*dt;
-            hawk.target=randomFlightTarget(hawk.g.position,18);
+            hawk.target=randomFlightTarget(hawk.g.position,16);
             hawk.targetAge=0;
           }
 
           hawk.g.position.addScaledVector(hawk.velocity,dt);
-          hawk.g.position.y=Math.max(hawk.g.position.y,heightAt(hawk.g.position.x,hawk.g.position.z)+5.3);
+          hawk.g.position.y=Math.max(hawk.g.position.y,heightAt(hawk.g.position.x,hawk.g.position.z)+4.9);
           const afterDirection=new THREE.Vector3(hawk.velocity.x,0,hawk.velocity.z).normalize();
           const bankTarget=THREE.MathUtils.clamp(signedHorizontalTurn(beforeDirection,afterDirection)*2.2,-.28,.28);
           orientAlongVelocity(hawk,hawk.velocity.x,hawk.velocity.y,hawk.velocity.z,bankTarget,.18);
@@ -234,10 +241,10 @@
     }catch(error){
       console.error('Errore nella creazione dello stormo:',error);
       for(const object of created)scene.remove(object);
-      showFallback('Errore falchi reali: ripristinati gli uccelli provvisori');
+      makeFallbackVisible('Errore falchi reali: uccelli provvisori visibili');
     }
   },undefined,error=>{
     console.error('Falco GLB non caricato:',error);
-    showFallback('Falco GLB non caricato: uso gli uccelli provvisori');
+    makeFallbackVisible('Falco GLB non caricato: uccelli provvisori visibili');
   });
 })();

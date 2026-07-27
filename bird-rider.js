@@ -78,17 +78,13 @@
     const duration=1.65;
     bird.flapBoost=Math.max(bird.flapBoost||0,1-grabSequenceT/duration);
 
-    // 1) Il peso di John fa perdere quota al falco.
-    // 2) Due/tre battiti energici recuperano gradualmente la quota.
     if(grabSequenceT<.38){
       const u=grabSequenceT/.38;
       bird.g.position.y=grabStartY-THREE.MathUtils.smoothstep(u,0,1)*1.35;
-      bird.g.rotation.x=THREE.MathUtils.lerp(bird.g.rotation.x,.22,.18);
     }else if(grabSequenceT<duration){
       const u=(grabSequenceT-.38)/(duration-.38);
       const recovery=THREE.MathUtils.smoothstep(u,0,1);
       bird.g.position.y=THREE.MathUtils.lerp(grabStartY-1.35,grabStartY+.45,recovery);
-      bird.g.rotation.x=THREE.MathUtils.lerp(bird.g.rotation.x,-.08,.12);
       bird.g.rotation.z=Math.sin(t*16)*(1-u)*.07;
     }else{
       document.getElementById('status').textContent='Falco sotto controllo — guidalo!';
@@ -100,7 +96,6 @@
   function updateBirdRide(dt,t,inputX,inputY,yawValue,pitchValue){
     grabCooldown=Math.max(0,grabCooldown-dt);
 
-    // Il contatto durante il salto aggancia automaticamente John al falco.
     if(!ridingBird&&airborne&&grabCooldown<=0){
       const bird=nearestReachableBird();
       if(bird)attachToBird(bird);
@@ -108,6 +103,7 @@
 
     if(!ridingBird)return false;
     const bird=ridingBird;
+    const before=bird.g.position.clone();
 
     if(grabSequenceT<1.65){
       updateGrabSequence(dt,t,bird);
@@ -118,19 +114,28 @@
       const rx=Math.cos(yawValue),rz=-Math.sin(yawValue);
       let vx=fx*forward+rx*side;
       let vz=fz*forward+rz*side;
-      const horizontal=Math.hypot(vx,vz);
-      if(horizontal>.01){vx/=horizontal;vz/=horizontal;}
-      const speed=horizontal>.01?10.5:2.2;
+      const horizontalInput=Math.hypot(vx,vz);
+      if(horizontalInput>.01){vx/=horizontalInput;vz/=horizontalInput;}
+      const speed=horizontalInput>.01?10.5:2.2;
       bird.g.position.x+=vx*speed*dt;
       bird.g.position.z+=vz*speed*dt;
       const ground=heightAt(bird.g.position.x,bird.g.position.z);
-      const climb=horizontal>.01?Math.max(-1,Math.min(1,-Math.sin(pitchValue)))*6.6:0;
+      const climb=horizontalInput>.01?Math.max(-1,Math.min(1,-Math.sin(pitchValue)))*6.6:0;
       bird.g.position.y+=climb*dt;
       bird.g.position.y=Math.max(ground+5.1,Math.min(40,bird.g.position.y));
-      if(horizontal>.01)bird.g.rotation.y=Math.atan2(vx,vz);
-      bird.g.rotation.z=THREE.MathUtils.lerp(bird.g.rotation.z,-side*.28,.12);
-      bird.g.rotation.x=THREE.MathUtils.lerp(bird.g.rotation.x,climb*.025,.1);
-      bird.flapBoost=horizontal>.01?.25:0;
+
+      const actualVx=(bird.g.position.x-before.x)/Math.max(dt,.001);
+      const actualVy=(bird.g.position.y-before.y)/Math.max(dt,.001);
+      const actualVz=(bird.g.position.z-before.z)/Math.max(dt,.001);
+      if(typeof orientHawkAlongVelocity==='function'&&bird.isRiggedHawk){
+        const bank=-side*.28;
+        orientHawkAlongVelocity(bird,actualVx,actualVy,actualVz,bank,.2);
+      }else if(horizontalInput>.01){
+        bird.g.rotation.y=Math.atan2(actualVx,actualVz);
+        bird.g.rotation.x=-Math.atan2(actualVy,Math.max(.001,Math.hypot(actualVx,actualVz)));
+        bird.g.rotation.z=THREE.MathUtils.lerp(bird.g.rotation.z,-side*.28,.12);
+      }
+      bird.flapBoost=horizontalInput>.01?.25:0;
     }
 
     if(!bird.isRiggedHawk){

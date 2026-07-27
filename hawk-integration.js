@@ -1,5 +1,5 @@
 (async()=>{
-  const HAWK_URL='hawk.glb?v=7';
+  const HAWK_URL='hawk.glb?v=8';
   const status=document.getElementById('status');
   const HAWK_COUNT=5;
 
@@ -22,8 +22,6 @@
     return current+delta*amount;
   }
 
-  // Il flight frame rappresenta soltanto la direzione risultante del volo.
-  // Il modello GLB è un figlio con una correzione anatomica locale indipendente.
   function orientAlongVelocity(hawk,vx,vy,vz,bankTarget=0,amount=.16){
     const raw=new THREE.Vector3(vx,vy,vz);
     if(raw.lengthSq()<.000001)return;
@@ -70,10 +68,10 @@
       const visual=index===0?gltf.scene:cloneSkeleton(gltf.scene);
       visual.name=`Sherkiz_Hawk_Visual_${index+1}`;
       visual.scale.setScalar(route.scale);
-      // Il GLB è costruito con il corpo lungo l'asse verticale locale.
-      // Questa rotazione lo dispone orizzontalmente nel flight frame.
-      visual.rotation.order='XYZ';
-      visual.rotation.x=-Math.PI/2;
+      visual.rotation.order='YXZ';
+      // Il GLB è già orizzontale. Il suo asse testa-coda punta verso -Z,
+      // mentre il flight frame usa +Z come direzione avanti.
+      visual.rotation.set(0,Math.PI,0);
       visual.traverse(o=>{
         if(o.isMesh){
           o.castShadow=true;

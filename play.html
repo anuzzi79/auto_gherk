@@ -6,8 +6,6 @@ fetch('https://raw.githubusercontent.com/anuzzi79/auto_gherk/fdfe74cc0f8f7fb1ec0
   src=src.replace("function requestJump(){if(typeof escapeWaterSlide==='function'&&escapeWaterSlide())","function requestJump(){if(typeof toggleBirdRide==='function'&&toggleBirdRide())return;if(typeof escapeWaterSlide==='function'&&escapeWaterSlide())");
   src=src.replace("if(typeof updateWaterSlide==='function')updateWaterSlide(dt,t);const target=","if(typeof updateWaterSlide==='function')updateWaterSlide(dt,t);if(typeof updateBirdRide==='function')updateBirdRide(dt,t,inputX,inputY,yaw,pitch);const target=");
   src=src.replace("}else{a.g.position.x+=Math.cos(a.a)*a.s*dt;","}else{if(a.riderControlled)continue;a.g.position.x+=Math.cos(a.a)*a.s*dt;");
-  src=src.replace("const inner=waterCode.replace(/^\\s*\\(\\(\\)=>\\{/，\"").replace(/\\}\\)\\(\\);\\s*$/,'');","const inner=waterCode.replace(/^\\s*\\(\\(\\)=>\\{/,\"\").replace(/\\}\\)\\(\\);\\s*$/,'');");
-  src=src.replace("const inner=waterCode.replace(/^\\s*\\(\\(\\)=>\\{/","const inner=waterCode.replace(/^\\s*\\(\\(\\)=>\\{/");
   src=src.replace("html=html.replace(\"setWeather('sun');animate();\",inner+\"\\nsetWeather('sun');animate();\");","const birdInner=birdCode.replace(/^\\s*\\(\\(\\)=>\\{/,\"\").replace(/\\}\\)\\(\\);\\s*$/,'');html=html.replace(\"setWeather('sun');animate();\",inner+\"\\n\"+birdInner+\"\\nsetWeather('sun');animate();\");");
   src=src.replace('John in the Island · Jump Build','John in the Island · Bird Rider Build');
   document.open();document.write(src);document.close();

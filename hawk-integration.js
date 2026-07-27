@@ -149,7 +149,8 @@
           cruiseSpeed:start.speed,velocity,target,targetAge:0,
           wasControlled:false,lastVelocity:velocity.clone(),
           flightDirection:velocity.clone().setY(0).normalize(),
-          safeStart:flightFrame.position.clone()
+          safeStart:flightFrame.position.clone(),
+          minAltitudeOffset:5.2,swooping:false
         };
         orientAlongVelocity(hawk,velocity.x,0,velocity.z,0,1);
         animals.push(hawk);
@@ -217,7 +218,8 @@
           hawk.velocity.x=THREE.MathUtils.lerp(hawk.velocity.x,steered.x*hawk.cruiseSpeed,1-Math.exp(-1.7*dt));
           hawk.velocity.z=THREE.MathUtils.lerp(hawk.velocity.z,steered.z*hawk.cruiseSpeed,1-Math.exp(-1.7*dt));
 
-          const minimumY=heightAt(hawk.g.position.x,hawk.g.position.z)+5.2;
+          const altitudeOffset=hawk.minAltitudeOffset??5.2;
+          const minimumY=heightAt(hawk.g.position.x,hawk.g.position.z)+altitudeOffset;
           const desiredVy=THREE.MathUtils.clamp((hawk.target.y-hawk.g.position.y)*.48,-2.2,2.2);
           hawk.velocity.y=THREE.MathUtils.lerp(hawk.velocity.y,desiredVy,1-Math.exp(-1.25*dt));
           if(hawk.g.position.y<minimumY)hawk.velocity.y=Math.max(hawk.velocity.y,(minimumY-hawk.g.position.y)*2);
@@ -232,7 +234,7 @@
           }
 
           hawk.g.position.addScaledVector(hawk.velocity,dt);
-          hawk.g.position.y=Math.max(hawk.g.position.y,heightAt(hawk.g.position.x,hawk.g.position.z)+4.9);
+          hawk.g.position.y=Math.max(hawk.g.position.y,heightAt(hawk.g.position.x,hawk.g.position.z)+altitudeOffset-.3);
           const afterDirection=new THREE.Vector3(hawk.velocity.x,0,hawk.velocity.z).normalize();
           const bankTarget=THREE.MathUtils.clamp(signedHorizontalTurn(beforeDirection,afterDirection)*2.2,-.28,.28);
           orientAlongVelocity(hawk,hawk.velocity.x,hawk.velocity.y,hawk.velocity.z,bankTarget,.18);

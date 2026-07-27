@@ -5,7 +5,7 @@
   let grabStartY=0;
   let grabFlightYaw=0;
 
-  function nearestReachableBird(maxDistance=3.7){
+  function nearestReachableBird(maxDistance=4.5){
     let best=null,bestD=Infinity;
     for(const animal of animals){
       if(animal.kind!=='bird'||animal.riderControlled||animal.disabled||!animal.g.visible)continue;

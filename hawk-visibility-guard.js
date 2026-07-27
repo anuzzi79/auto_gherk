@@ -54,4 +54,40 @@
       }
     }
   },CHECK_EVERY_MS);
+
+  const SWOOP_MIN_INTERVAL_MS=11000;
+  const SWOOP_MAX_INTERVAL_MS=15000;
+  const SWOOP_ALTITUDE_OFFSET=3.8;
+  const SWOOP_LOW_ALTITUDE_FLOOR=2.0;
+  const SWOOP_DURATION_MS=4500;
+  const SWOOP_DEFAULT_ALTITUDE_FLOOR=5.2;
+
+  function attemptSwoop(){
+    if(typeof john==='undefined')return;
+    const candidates=(window.johnHawks||[]).filter(h=>h&&h.g&&h.isRiggedHawk&&!h.riderControlled&&!h.swooping);
+    if(!candidates.length)return;
+    const hawk=candidates[Math.floor(Math.random()*candidates.length)];
+    const angle=Math.random()*Math.PI*2;
+    const distance=2+Math.random()*1.5;
+    const tx=john.position.x+Math.cos(angle)*distance;
+    const tz=john.position.z+Math.sin(angle)*distance;
+    const ty=heightAt(tx,tz)+SWOOP_ALTITUDE_OFFSET;
+    hawk.swooping=true;
+    hawk.minAltitudeOffset=SWOOP_LOW_ALTITUDE_FLOOR;
+    hawk.target=new THREE.Vector3(tx,ty,tz);
+    hawk.targetAge=0;
+    setTimeout(()=>{
+      hawk.minAltitudeOffset=SWOOP_DEFAULT_ALTITUDE_FLOOR;
+      hawk.swooping=false;
+    },SWOOP_DURATION_MS);
+  }
+
+  function scheduleSwoop(){
+    const delay=SWOOP_MIN_INTERVAL_MS+Math.random()*(SWOOP_MAX_INTERVAL_MS-SWOOP_MIN_INTERVAL_MS);
+    setTimeout(()=>{
+      attemptSwoop();
+      scheduleSwoop();
+    },delay);
+  }
+  scheduleSwoop();
 })();

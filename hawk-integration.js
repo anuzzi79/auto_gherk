@@ -1,5 +1,5 @@
 (async()=>{
-  const HAWK_URL='hawk.glb?v=5';
+  const HAWK_URL='hawk.glb?v=6';
   const status=document.getElementById('status');
   const HAWK_COUNT=5;
 
@@ -15,6 +15,23 @@
     console.warn('Moduli GLTF non disponibili:',error);
     status.textContent='Caricatore GLB non disponibile: uso gli uccelli provvisori';
     return;
+  }
+
+  function lerpAngle(current,target,amount){
+    const delta=Math.atan2(Math.sin(target-current),Math.cos(target-current));
+    return current+delta*amount;
+  }
+
+  function orientAlongVelocity(hawk,vx,vy,vz,bankTarget=0,amount=.16){
+    const horizontal=Math.hypot(vx,vz);
+    if(horizontal<.0001&&Math.abs(vy)<.0001)return;
+    const targetYaw=Math.atan2(vx,vz);
+    const targetPitch=-Math.atan2(vy,Math.max(.0001,horizontal));
+    hawk.g.rotation.order='YXZ';
+    hawk.g.rotation.y=lerpAngle(hawk.g.rotation.y,targetYaw,amount);
+    hawk.g.rotation.x=THREE.MathUtils.lerp(hawk.g.rotation.x,targetPitch,amount);
+    hawk.g.rotation.z=THREE.MathUtils.lerp(hawk.g.rotation.z,bankTarget,amount*.8);
+    hawk.lastVelocity.set(vx,vy,vz);
   }
 
   const loader=new GLTFLoader();
@@ -40,6 +57,7 @@
       const model=index===0?gltf.scene:cloneSkeleton(gltf.scene);
       model.name=`Sherkiz_Hawk_Rigged_${index+1}`;
       model.scale.setScalar(route.scale);
+      model.rotation.order='YXZ';
       model.traverse(o=>{
         if(o.isMesh){
           o.castShadow=true;
@@ -57,6 +75,12 @@
         action.timeScale=.88+index*.055;
       }
 
+      const angle=route.phase;
+      const initialX=route.cx+Math.cos(angle)*route.r;
+      const initialZ=route.cz+Math.sin(angle)*route.r;
+      const initialY=Math.max(heightAt(initialX,initialZ)+5.4,route.base);
+      model.position.set(initialX,initialY,initialZ);
+
       const hawk={
         g:model,
         a:route.phase,
@@ -70,12 +94,15 @@
         originalScale:model.scale.clone(),
         flapBoost:0,
         route:{...route},
-        wasControlled:false
+        wasControlled:false,
+        previousPosition:model.position.clone(),
+        lastVelocity:new THREE.Vector3()
       };
       animals.push(hawk);
       hawks.push(hawk);
     });
 
+    window.orientHawkAlongVelocity=orientAlongVelocity;
     window.johnHawks=hawks;
     window.johnHawk=hawks[0];
     status.textContent=clip?`${hawks.length} falchi animati sorvolano l’isola`:`${hawks.length} falchi caricati senza animazione Fly`;
@@ -87,10 +114,11 @@
       const dt=Math.min(clock.getDelta(),.05);
       elapsed+=dt;
 
-      for(const hawk of hawks){
+      for(let index=0;index<hawks.length;index++){
+        const hawk=hawks[index];
         const boost=hawk.flapBoost||0;
         if(hawk.action){
-          const normalSpeed=.95+(hawks.indexOf(hawk)*.045);
+          const normalSpeed=.95+index*.045;
           hawk.action.timeScale=THREE.MathUtils.lerp(hawk.action.timeScale,normalSpeed+boost*1.45,.12);
         }
         hawk.mixer.update(dt);
@@ -98,6 +126,7 @@
 
         if(hawk.riderControlled){
           hawk.wasControlled=true;
+          hawk.previousPosition.copy(hawk.g.position);
           continue;
         }
 
@@ -105,21 +134,23 @@
         if(hawk.wasControlled){
           route.phase=Math.atan2(hawk.g.position.z-route.cz,hawk.g.position.x-route.cx)-elapsed*route.omega;
           hawk.wasControlled=false;
+          hawk.previousPosition.copy(hawk.g.position);
         }
 
         const angle=route.phase+elapsed*route.omega;
-        const nextAngle=angle+route.omega*.04;
         const x=route.cx+Math.cos(angle)*route.r;
         const z=route.cz+Math.sin(angle)*route.r;
-        const nx=route.cx+Math.cos(nextAngle)*route.r;
-        const nz=route.cz+Math.sin(nextAngle)*route.r;
         const terrain=heightAt(x,z);
         const y=Math.max(terrain+5.4,route.base+Math.sin(elapsed*1.15+route.phase)*route.bob);
 
+        const vx=(x-hawk.previousPosition.x)/Math.max(dt,.001);
+        const vy=(y-hawk.previousPosition.y)/Math.max(dt,.001);
+        const vz=(z-hawk.previousPosition.z)/Math.max(dt,.001);
         hawk.g.position.set(x,y,z);
-        hawk.g.rotation.y=Math.atan2(nx-x,nz-z);
-        hawk.g.rotation.z=THREE.MathUtils.lerp(hawk.g.rotation.z,-Math.sign(route.omega)*.12,.08);
-        hawk.g.rotation.x=THREE.MathUtils.lerp(hawk.g.rotation.x,Math.sin(elapsed*.7+route.phase)*.035,.08);
+
+        const turnBank=-Math.sign(route.omega)*Math.min(.24,Math.abs(route.omega)*.9);
+        orientAlongVelocity(hawk,vx,vy,vz,turnBank,.18);
+        hawk.previousPosition.copy(hawk.g.position);
       }
     })();
   },undefined,error=>{

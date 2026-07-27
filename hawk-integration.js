@@ -1,9 +1,10 @@
 (()=>{
-  const HAWK_URL='assets/hawk.glb?v=1';
+  const HAWK_URL='hawk.glb?v=2';
   const status=document.getElementById('status');
 
   if(typeof THREE.GLTFLoader!=='function'){
     console.warn('GLTFLoader non disponibile: mantengo gli uccelli provvisori.');
+    status.textContent='Caricatore GLB non disponibile: uso gli uccelli provvisori';
     return;
   }
 
@@ -15,16 +16,23 @@
     model.position.set(4,heightAt(4,18)+6.1,18);
     model.rotation.y=Math.PI;
     model.traverse(o=>{
-      if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;}
+      if(o.isMesh){
+        o.castShadow=true;
+        o.receiveShadow=true;
+        o.frustumCulled=false;
+      }
     });
     scene.add(model);
 
     const mixer=new THREE.AnimationMixer(model);
     const clip=gltf.animations.find(a=>a.name==='metarig|Fly')||gltf.animations[0];
     const action=clip?mixer.clipAction(clip):null;
-    if(action){action.reset().setLoop(THREE.LoopRepeat,Infinity).play();action.timeScale=1;}
+    if(action){
+      action.reset().setLoop(THREE.LoopRepeat,Infinity).play();
+      action.timeScale=1;
+    }
 
-    // Gli uccelli geometrici restano solo come fallback finché il GLB non è pronto.
+    // Nasconde gli uccelli geometrici soltanto dopo il caricamento riuscito.
     for(const animal of animals){
       if(animal.kind==='bird'){
         animal.disabled=true;
@@ -46,7 +54,7 @@
     };
     animals.push(hawk);
     window.johnHawk=hawk;
-    status.textContent='Il falco animato sorvola l’isola';
+    status.textContent=clip?'Il falco animato sorvola l’isola':'Falco caricato senza animazione Fly';
 
     const clock=new THREE.Clock();
     (function animateHawkRig(){
@@ -59,6 +67,6 @@
     })();
   },undefined,error=>{
     console.warn('Falco GLB non caricato:',error);
-    status.textContent='Falco GLB non trovato: uso gli uccelli provvisori';
+    status.textContent='Falco GLB non caricato: uso gli uccelli provvisori';
   });
 })();
